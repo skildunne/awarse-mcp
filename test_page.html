@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AWARSE Mock Test Page</title>
+</head>
+<body>
+    <h1>AWARSE Mock Test Page</h1>
+    <div id="form-container">
+        <p>This is a mock page designed to verify the self-healing capabilities of the AWARSE MCP server.</p>
+        
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="user_name" placeholder="Enter username"><br><br>
+
+        <label for="email">Email:</label>
+        <input type="email" id="email" name="user_email" placeholder="Enter email"><br><br>
+
+        <!-- Initial submit button -->
+        <button id="submit-btn" class="btn btn-default">Submit Form</button>
+    </div>
+
+    <div id="status" style="margin-top: 20px; font-weight: bold; color: green; font-size: 1.2em;"></div>
+
+    <script>
+        // Initial click handler
+        document.getElementById('submit-btn').onclick = function() {
+            document.getElementById('status').innerText = "Form submitted successfully via #submit-btn!";
+        };
+
+        // Function to simulate a layout update / redesign that breaks old selectors
+        function mutateDOM() {
+            console.log("Simulating dynamic DOM mutation...");
+            const btn = document.getElementById('submit-btn');
+            if (btn) {
+                // Relocate/rename attributes to break the original `#submit-btn` selector
+                btn.id = "healed-submit-action-button";
+                btn.className = "btn btn-primary new-design-button";
+                btn.innerText = "Send Details";
+                
+                // Update click handler to show it worked
+                btn.onclick = function() {
+                    document.getElementById('status').innerText = "Form submitted successfully via HEALED button!";
+                };
+            }
+        }
+    </script>
+</body>
+</html>
