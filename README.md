@@ -104,6 +104,27 @@ To execute this integrated agent test, run:
 ```bash
 venv/bin/python example_use.py
 ```
+---
+
+## Customizing the Healer LLM Provider
+
+AWARSE supports multiple LLM backends (Gemini, Claude/Anthropic, and OpenAI/Copilot/local models) to execute the healing process. You configure these by adding variables to your `.env` or client environment configuration:
+
+### 1. Using Gemini (Default)
+* Set `LLM_PROVIDER="gemini"`
+* Set `GEMINI_API_KEY="your-api-key"`
+* *(Optional)* Set `GEMINI_MODEL="gemini-2.5-flash"`
+
+### 2. Using Claude (Anthropic)
+* Set `LLM_PROVIDER="claude"` (or `"anthropic"`)
+* Set `ANTHROPIC_API_KEY="your-api-key"`
+* *(Optional)* Set `ANTHROPIC_MODEL="claude-3-5-haiku-latest"`
+
+### 3. Using OpenAI / Copilot / Local Models (Ollama, vLLM)
+* Set `LLM_PROVIDER="openai"`
+* Set `OPENAI_API_KEY="your-api-key"`
+* *(Optional)* Set `OPENAI_MODEL="gpt-4o-mini"`
+* *(Optional)* Set `OPENAI_BASE_URL="http://localhost:11434/v1"` (to run Ollama locally or hook up custom Copilot/vLLM endpoints)
 
 ---
 

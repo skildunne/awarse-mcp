@@ -44,7 +44,7 @@ class PlaywrightBrowser:
 browser_manager = PlaywrightBrowser()
 
 async def heal_selector(page, failed_selector: str, action_type: str) -> str:
-    """Uses Gemini API to heal a failed selector by analyzing the DOM state."""
+    """Uses the configured LLM provider to heal a failed selector by analyzing the DOM state."""
     # Capture current DOM interactive elements
     dom_snapshot = await page.evaluate("""() => {
         const elements = Array.from(document.querySelectorAll('input, button, select, textarea, a, [role="button"], [class*="btn"]'));
@@ -70,11 +70,8 @@ async def heal_selector(page, failed_selector: str, action_type: str) -> str:
     # Format simplified DOM representation
     dom_str = json.dumps(dom_snapshot, indent=2)
     
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY not found in environment.")
-        
-    client = genai.Client(api_key=api_key)
+    # Get provider from environment (default to gemini)
+    provider = os.environ.get("LLM_PROVIDER", "gemini").lower()
     
     prompt = f"""
 You are the self-healing engine of AWARSE (Autonomous Web-Automation Runtime Self-Healing Engine).
@@ -102,24 +99,70 @@ Return ONLY a JSON object matching this structure:
 }}
 """
     
-    print(f"[AWARSE Healer] Invoking Gemini model (gemini-2.5-flash) to heal selector...")
+    print(f"[AWARSE Healer] Invoking LLM provider '{provider}' to heal selector...")
     
-    response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=prompt,
-        config=genai_types.GenerateContentConfig(
-            response_mime_type="application/json"
+    if provider == "gemini":
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY not found in environment.")
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model=os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"),
+            contents=prompt,
+            config=genai_types.GenerateContentConfig(
+                response_mime_type="application/json"
+            )
         )
-    )
-    
+        response_text = response.text
+        
+    elif provider in ("anthropic", "claude"):
+        from anthropic import Anthropic
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY not found in environment.")
+        client = Anthropic(api_key=api_key)
+        model = os.environ.get("ANTHROPIC_MODEL", "claude-3-5-haiku-latest")
+        response = client.messages.create(
+            model=model,
+            max_tokens=1000,
+            system="You are an expert web automation healer. You output ONLY valid JSON.",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        response_text = response.content[0].text
+        
+    elif provider in ("openai", "copilot"):
+        from openai import OpenAI
+        api_key = os.environ.get("OPENAI_API_KEY")
+        base_url = os.environ.get("OPENAI_BASE_URL", None)
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY not found in environment.")
+        client = OpenAI(api_key=api_key, base_url=base_url)
+        model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"}
+        )
+        response_text = response.choices[0].message.content
+        
+    else:
+        raise ValueError(f"Unsupported LLM provider: {provider}")
+        
     try:
-        result = json.loads(response.text)
+        clean_text = response_text.strip()
+        if clean_text.startswith("```json"):
+            clean_text = clean_text[7:]
+        if clean_text.endswith("```"):
+            clean_text = clean_text[:-3]
+        clean_text = clean_text.strip()
+        
+        result = json.loads(clean_text)
         healed = result.get("healed_selector")
         print(f"[AWARSE Healer] HEALED: '{failed_selector}' -> '{healed}' (confidence: {result.get('confidence')})")
         print(f"[AWARSE Healer] REASON: {result.get('explanation')}")
         return healed
     except Exception as e:
-        print(f"[AWARSE Healer] Failed to parse healer response: {e}. Raw response: {response.text}")
+        print(f"[AWARSE Healer] Failed to parse healer response: {e}. Raw response: {response_text}")
         raise
 
 @mcp.tool()
