@@ -43,37 +43,87 @@ class PlaywrightBrowser:
 # Global browser manager instance
 browser_manager = PlaywrightBrowser()
 
+async def generate_markdown_snapshot(page) -> str:
+    """Generates a highly token-efficient markdown representation of interactive elements, similar to playwright-cli."""
+    snapshot_js = """() => {
+        const elements = Array.from(document.querySelectorAll('input, button, select, textarea, a, [role="button"], [class*="btn"]'));
+        let result = [];
+        elements.forEach((el, index) => {
+            const rect = el.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0 || window.getComputedStyle(el).display === 'none') {
+                return;
+            }
+            
+            const tagName = el.tagName.toLowerCase();
+            const id = el.id ? `#${el.id}` : '';
+            const className = el.className ? `.${el.className.trim().replace(/\\s+/g, '.')}` : '';
+            const text = el.innerText || el.value || '';
+            const type = el.type ? `[type="${el.type}"]` : '';
+            const role = el.getAttribute('role') ? `[role="${el.getAttribute('role')}"]` : '';
+            const name = el.getAttribute('name') ? `[name="${el.getAttribute('name')}"]` : '';
+            const placeholder = el.getAttribute('placeholder') ? `[placeholder="${el.getAttribute('placeholder')}"]` : '';
+            const ariaLabel = el.getAttribute('aria-label') ? `[aria-label="${el.getAttribute('aria-label')}"]` : '';
+            
+            let attrs = [id, className, type, role, name, placeholder, ariaLabel].filter(Boolean).join(' ');
+            let item = `- [e${index}] <${tagName} ${attrs}> "${text.trim().substring(0, 50)}"`;
+            result.push(item);
+        });
+        return result.join('\\n');
+    }"""
+    return await page.evaluate(snapshot_js)
+
 async def heal_selector(page, failed_selector: str, action_type: str) -> str:
     """Uses the configured LLM provider to heal a failed selector by analyzing the DOM state."""
-    # Capture current DOM interactive elements
-    dom_snapshot = await page.evaluate("""() => {
-        const elements = Array.from(document.querySelectorAll('input, button, select, textarea, a, [role="button"], [class*="btn"]'));
-        return elements.map((el, index) => {
-            return {
-                index: index,
-                tagName: el.tagName,
-                id: el.id,
-                className: el.className,
-                text: el.innerText || el.value || '',
-                type: el.type || '',
-                role: el.getAttribute('role') || '',
-                name: el.getAttribute('name') || '',
-                placeholder: el.getAttribute('placeholder') || '',
-                ariaLabel: el.getAttribute('aria-label') || ''
-            };
-        });
-    }""")
-    
-    # Retrieve page HTML for small-page full context
-    html_content = await page.content()
-    
-    # Format simplified DOM representation
-    dom_str = json.dumps(dom_snapshot, indent=2)
-    
-    # Get provider from environment (default to gemini)
+    # Check if token-efficient mode is enabled (default is True)
+    token_efficient = os.environ.get("TOKEN_EFFICIENT_MODE", "true").lower() == "true"
     provider = os.environ.get("LLM_PROVIDER", "gemini").lower()
     
-    prompt = f"""
+    if token_efficient:
+        print(f"[AWARSE Healer] Generating token-efficient Markdown snapshot...")
+        snapshot_str = await generate_markdown_snapshot(page)
+        prompt = f"""
+You are the self-healing engine of AWARSE (Autonomous Web-Automation Runtime Self-Healing Engine).
+A web interaction '{action_type}' failed because the selector '{failed_selector}' could not be located.
+The structure of the web page has changed. Your task is to identify the new selector for the intended element.
+
+Here is a token-efficient interactive element map of the current page layout:
+```markdown
+{snapshot_str}
+```
+
+Based on the old selector '{failed_selector}' and the current page elements, identify the intended target.
+Provide a corrected, working CSS selector for that element.
+
+Return ONLY a JSON object matching this structure:
+{{
+  "healed_selector": "working CSS selector (e.g., 'button.btn-primary' or 'input#email')",
+  "explanation": "Brief reasoning for selecting this element",
+  "confidence": 0.0 to 1.0
+}}
+"""
+    else:
+        # Fallback to full HTML context and JSON DOM snapshot
+        print(f"[AWARSE Healer] Falling back to full HTML context...")
+        dom_snapshot = await page.evaluate("""() => {
+            const elements = Array.from(document.querySelectorAll('input, button, select, textarea, a, [role="button"], [class*="btn"]'));
+            return elements.map((el, index) => {
+                return {
+                    index: index,
+                    tagName: el.tagName,
+                    id: el.id,
+                    className: el.className,
+                    text: el.innerText || el.value || '',
+                    type: el.type || '',
+                    role: el.getAttribute('role') || '',
+                    name: el.getAttribute('name') || '',
+                    placeholder: el.getAttribute('placeholder') || '',
+                    ariaLabel: el.getAttribute('aria-label') || ''
+                };
+            });
+        }""")
+        html_content = await page.content()
+        dom_str = json.dumps(dom_snapshot, indent=2)
+        prompt = f"""
 You are the self-healing engine of AWARSE (Autonomous Web-Automation Runtime Self-Healing Engine).
 A web interaction '{action_type}' failed because the selector '{failed_selector}' could not be located.
 The structure of the web page has changed. Your task is to identify the new selector for the intended element.

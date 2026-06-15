@@ -126,6 +126,13 @@ AWARSE supports multiple LLM backends (Gemini, Claude/Anthropic, and OpenAI/Copi
 * *(Optional)* Set `OPENAI_MODEL="gpt-4o-mini"`
 * *(Optional)* Set `OPENAI_BASE_URL="http://localhost:11434/v1"` (to run Ollama locally or hook up custom Copilot/vLLM endpoints)
 
+### 4. Token Efficiency Configuration
+By default, AWARSE uses a highly token-efficient markdown layout snapshot (conceptually similar to `playwright-cli`). This filters out boilerplate HTML layout code and sends only relevant interactive elements to the LLM (typically reducing input token sizes by **80%–90%**).
+
+You can toggle this mode using:
+* `TOKEN_EFFICIENT_MODE="true"` (Default - uses optimized markdown element mapping)
+* `TOKEN_EFFICIENT_MODE="false"` (Uses raw HTML body context + JSON DOM representation)
+
 ---
 
 ## How to Register AWARSE in your MCP Client
