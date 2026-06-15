@@ -88,6 +88,25 @@ venv/bin/python verify_healing.py
 
 ---
 
+## Agentic Usage Example (Antigravity SDK)
+
+We have provided a ready-to-run integration script **[example_use.py](example_use.py)** showing how to hook the AWARSE MCP server into a custom agent built on the **Google Antigravity SDK**. 
+
+The script performs the following sequence:
+1. Spawns an Antigravity agent configured with the AWARSE local Stdio MCP server.
+2. Instructs the agent to navigate to `test_page.html`.
+3. Commands the agent to fill in input fields.
+4. Simulates a page redesign by evaluating `mutateDOM()` (breaking the selector).
+5. Asks the agent to click the *original* selector (`#submit-btn`).
+6. AWARSE intercepts the timeout error, invokes Gemini to heal it, and successfully clicks the newly generated selector (`#healed-submit-action-button`).
+
+To execute this integrated agent test, run:
+```bash
+venv/bin/python example_use.py
+```
+
+---
+
 ## How to Register AWARSE in your MCP Client
 
 To register AWARSE with your preferred AI coding assistants (e.g., Claude Desktop, Cursor, VS Code, etc.), add the following server configuration to your `mcp_config.json` file:
