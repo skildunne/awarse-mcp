@@ -2,6 +2,7 @@ import asyncio
 import os
 import json
 import dotenv
+from datetime import datetime
 from mcp.server.fastmcp import FastMCP
 from playwright.async_api import async_playwright
 from google import genai
@@ -12,6 +13,9 @@ dotenv.load_dotenv()
 
 # Initialize FastMCP Server
 mcp = FastMCP("awarse")
+
+# In-memory log of healed selectors for the session
+healed_logs = []
 
 class PlaywrightBrowser:
     def __init__(self):
@@ -210,6 +214,17 @@ Return ONLY a JSON object matching this structure:
         healed = result.get("healed_selector")
         print(f"[AWARSE Healer] HEALED: '{failed_selector}' -> '{healed}' (confidence: {result.get('confidence')})")
         print(f"[AWARSE Healer] REASON: {result.get('explanation')}")
+        
+        # Log to in-memory resources
+        healed_logs.append({
+            "timestamp": datetime.now().isoformat(),
+            "action_type": action_type,
+            "failed_selector": failed_selector,
+            "healed_selector": healed,
+            "explanation": result.get("explanation"),
+            "confidence": result.get("confidence")
+        })
+        
         return healed
     except Exception as e:
         print(f"[AWARSE Healer] Failed to parse healer response: {e}. Raw response: {response_text}")
@@ -285,6 +300,50 @@ async def take_screenshot(filename: str = "screenshot.png") -> str:
     print(f"[AWARSE] Saving screenshot to: {filepath}")
     await page.screenshot(path=filepath)
     return f"Screenshot saved successfully to {filepath}"
+
+# --- RESOURCES ---
+
+@mcp.resource("awarse://logs/healed-selectors")
+def get_healed_logs() -> str:
+    """Get the session log of all selectors successfully healed by AWARSE."""
+    return json.dumps(healed_logs, indent=2)
+
+@mcp.resource("awarse://page/dom")
+async def get_page_dom() -> str:
+    """Get the token-efficient Markdown snapshot of the active page layout."""
+    page = await browser_manager.get_page()
+    if page:
+        return await generate_markdown_snapshot(page)
+    return "No active page loaded."
+
+# --- PROMPTS ---
+
+@mcp.prompt()
+def diagnose_selector_failure(selector: str, action: str) -> str:
+    """Create a diagnostic assistant prompt to analyze a failed web element action."""
+    return f"""
+Analyze the web automation failure for action '{action}' on selector '{selector}'.
+First, review the healed selectors logs using the 'awarse://logs/healed-selectors' resource.
+Then, output a clear summary detailing:
+1. Why the original selector failed.
+2. The healed selector that AWARSE successfully resolved.
+3. Recommend how the user should update their codebase or test scripts to use the stable, repaired selector.
+"""
+
+@mcp.prompt()
+def generate_playwright_test(url: str) -> str:
+    """Create a prompt to generate a new Playwright test based on the active page layout."""
+    return f"""
+You are an expert QA and automation engineer.
+Generate a complete, modern Playwright TypeScript test file that interacts with the page: '{url}'.
+
+Use the 'awarse://page/dom' resource to view the structure of the page, locate the interactive elements, and identify the most stable, reliable selectors to write the automation steps.
+
+Make sure the test script:
+1. Navigates to the URL.
+2. Interacts with the elements cleanly.
+3. Includes solid assertions.
+"""
 
 if __name__ == "__main__":
     # Start the FastMCP server

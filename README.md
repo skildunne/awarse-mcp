@@ -46,6 +46,20 @@ The server exposes the following tools:
 
 ---
 
+## Extended Capabilities: Resources & Prompts
+
+In addition to tools, AWARSE exposes **Resources** (structured data read by the LLM) and **Prompts** (pre-defined templates for automation tasks).
+
+### 1. Resources
+* **`awarse://logs/healed-selectors`**: Exposes a real-time JSON log of all selectors successfully healed during the active session. This allows coding assistants to examine exactly what broke and what was repaired.
+* **`awarse://page/dom`**: Exposes the token-efficient markdown element map of the active web page. Useful for LLMs to survey the page layout before proposing selectors.
+
+### 2. Prompts
+* **`diagnose_selector_failure(selector, action)`**: A troubleshooting assistant template that pulls the `awarse://logs/healed-selectors` resource, analyzes why the selector failed, and recommends code corrections.
+* **`generate_playwright_test(url)`**: A test generator template that pulls the active layout map from `awarse://page/dom` and writes a complete, modern Playwright TypeScript test file.
+
+---
+
 ## Setup & Installation
 
 ### 1. Prerequisites
