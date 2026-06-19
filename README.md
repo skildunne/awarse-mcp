@@ -62,12 +62,22 @@ In addition to tools, AWARSE exposes **Resources** (structured data read by the 
 
 ## Setup & Installation
 
-### 1. Prerequisites
+### 1. Download & Clone
+Independent users can clone the repository from GitHub:
+```bash
+# Clone the repository
+git clone https://github.com/skildunne/awarse-mcp.git
+
+# Enter the project directory
+cd awarse-mcp
+```
+
+### 2. Prerequisites
 Ensure you have the following installed on your system:
 * Python 3.11+
 * Node.js and `npm`
 
-### 2. Install Dependencies
+### 3. Install Dependencies
 Create a virtual environment and install the required Python packages and browser binaries:
 ```bash
 # Create virtual environment
@@ -80,7 +90,7 @@ venv/bin/pip install playwright mcp google-antigravity python-dotenv
 venv/bin/playwright install chromium
 ```
 
-### 3. Configure Environment Secret
+### 4. Configure Environment Secrets
 Create a `.env` file in the root of the project directory:
 ```env
 GEMINI_API_KEY="your-gemini-api-key"
@@ -183,3 +193,52 @@ To register AWARSE with your preferred AI coding assistants (e.g., Claude Deskto
 }
 ```
 > **Note**: Update paths in the configuration block to point to your absolute paths.
+
+---
+
+## Customer Site & Production Deployment
+
+To run the self-healing orchestrator on a customer site, you can choose between two deployment topologies depending on security requirements and network boundaries.
+
+### Topology A: Local Stdio Deployment (Recommended for Secure/Air-gapped Environments)
+In this mode, the AWARSE server runs locally on the customer's build runners, VMs, or developer laptops. This keeps all DOM parsing, page screenshots, and browser lifecycles local and behind their corporate firewall.
+
+1. **Provision the Host VM / Runner**:
+   - Ensure the machine has Python 3.11+, Node.js/NPM, and access to the target LLM API endpoints.
+2. **Clone and Install AWARSE**:
+   - Follow the **Setup & Installation** steps on the machine.
+3. **Configure CI/CD Pipeline (e.g., GitHub Actions or GitLab Runner)**:
+   - Add the server configuration to their workspace.
+   - Run the background server in their script before kicking off test runs:
+     ```bash
+     # Start AWARSE in the background
+     venv/bin/python self_healing_server.py &
+     
+     # Run tests (configured to use AWARSE tools)
+     npm run test
+     ```
+
+### Topology B: Remote SSE Service Deployment (Shared Team Server)
+In this mode, AWARSE runs as a centralized shared service inside the customer's Kubernetes cluster, AWS, GCP, or a dedicated team VM. Multiple developer clients and CI runners can connect to it concurrently over HTTP using SSE (Server-Sent Events) transport.
+
+1. **Deploy the Server**:
+   - Run the server in development or production SSE mode on a dedicated host (e.g., `http://awarse-internal-dns:8000`).
+   - Run AWARSE via the FastMCP entrypoint or standard server launcher:
+     ```bash
+     # Run FastMCP SSE server
+     venv/bin/mcp dev self_healing_server.py --port 8000
+     ```
+2. **Register the Remote SSE Server on Client Devices**:
+   - Update developer client `mcp_config.json` files on the customer site to point to the shared endpoint:
+     ```json
+     {
+       "mcpServers": {
+         "awarse": {
+           "url": "http://awarse-internal-dns:8000/sse"
+         }
+       }
+     }
+     ```
+3. **Network & Ingress Security**:
+   - **Authentication**: Bind the server behind an OIDC reverse proxy, API Gateway, or VPN (like Tailscale) to prevent unauthorized API access.
+   - **LLM Key Configuration**: The LLM credentials (e.g., `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`) are managed entirely on the centralized server, meaning developers on site do not need individual LLM API keys.
