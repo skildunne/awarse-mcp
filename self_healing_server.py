@@ -2,7 +2,10 @@ import asyncio
 import os
 import json
 import dotenv
+import threading
 from datetime import datetime
+from http.server import SimpleHTTPRequestHandler
+import socketserver
 from mcp.server.fastmcp import FastMCP
 from playwright.async_api import async_playwright
 from google import genai
@@ -16,6 +19,34 @@ mcp = FastMCP("awarse")
 
 # In-memory log of healed selectors for the session
 healed_logs = []
+
+def start_dashboard(port=8080):
+    class QuietHandler(SimpleHTTPRequestHandler):
+        # Quiet console spam during stdio transport sessions
+        def log_message(self, format, *args):
+            return
+
+    # Serve files from the directory where dashboard.html lives
+    handler = QuietHandler
+    socketserver.TCPServer.allow_reuse_address = True
+    try:
+        with socketserver.TCPServer(("", port), handler) as httpd:
+            print(f"[*] AWARSE Dashboard running at http://localhost:{port}")
+            httpd.serve_forever()
+    except Exception as e:
+        print(f"[!] Failed to start dashboard server: {e}")
+
+# Spin up in a daemon thread so it closes when the main MCP server stops
+threading.Thread(target=start_dashboard, daemon=True).start()
+
+# Initialize empty healed_logs.json for the dashboard
+try:
+    server_dir = os.path.dirname(os.path.abspath(__file__))
+    log_path = os.path.join(server_dir, "healed_logs.json")
+    with open(log_path, "w") as f:
+        json.dump([], f, indent=2)
+except Exception as init_err:
+    pass
 
 class PlaywrightBrowser:
     def __init__(self):
@@ -224,6 +255,15 @@ Return ONLY a JSON object matching this structure:
             "explanation": result.get("explanation"),
             "confidence": result.get("confidence")
         })
+        
+        # Dump to healed_logs.json file for the local dashboard to read
+        try:
+            server_dir = os.path.dirname(os.path.abspath(__file__))
+            log_path = os.path.join(server_dir, "healed_logs.json")
+            with open(log_path, "w") as f:
+                json.dump(healed_logs, f, indent=2)
+        except Exception as log_err:
+            print(f"[AWARSE] Failed to write healed_logs.json: {log_err}")
         
         return healed
     except Exception as e:

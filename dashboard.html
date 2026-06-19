@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWARSE Healer Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --container-bg: rgba(17, 24, 39, 0.7);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --accent-primary: #8b5cf6;
+            --accent-glow: rgba(139, 92, 246, 0.15);
+            --success: #10b981;
+            --success-glow: rgba(16, 185, 129, 0.15);
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 2rem;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.05) 0%, transparent 40%);
+            background-attachment: fixed;
+        }
+
+        header {
+            max-width: 1200px;
+            margin: 0 auto 2rem auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo-group h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(to right, #a78bfa, #34d399);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.25rem;
+        }
+
+        .logo-group p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            color: var(--success);
+            font-weight: 500;
+            font-size: 0.85rem;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--success);
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        main {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            gap: 2rem;
+        }
+
+        /* Stats Row */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .stat-card {
+            background: var(--container-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            backdrop-filter: blur(16px);
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        .stat-card h3 {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card .value {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        /* Logs Table Card */
+        .logs-card {
+            background: var(--container-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2rem;
+            backdrop-filter: blur(16px);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-header h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .refresh-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 500;
+            font-size: 0.85rem;
+            transition: background 0.2s;
+        }
+
+        .refresh-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* List Items */
+        .log-list {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .log-item {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.25rem;
+            transition: all 0.3s ease;
+        }
+
+        .log-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(139, 92, 246, 0.2);
+        }
+
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .selector-mapping {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .selector-pill {
+            font-family: monospace;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        .selector-pill.broken {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            text-decoration: line-through;
+        }
+
+        .selector-pill.healed {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .arrow {
+            color: var(--text-secondary);
+            font-weight: bold;
+        }
+
+        .meta-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .action-badge {
+            background: rgba(139, 92, 246, 0.15);
+            color: #a78bfa;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            padding: 0.2rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .confidence-badge {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.2rem 0.6rem;
+            border-radius: 6px;
+        }
+
+        .confidence-badge.high {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .confidence-badge.medium {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .timestamp {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+
+        .log-explanation {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            border-left: 3px solid var(--accent-primary);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-state svg {
+            width: 48px;
+            height: 48px;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            opacity: 0.5;
+            animation: pulse-slow 3s infinite ease-in-out;
+        }
+
+        @keyframes pulse-slow {
+            0%, 100% { transform: scale(1); opacity: 0.4; }
+            50% { transform: scale(1.08); opacity: 0.7; }
+        }
+
+        .empty-state p {
+            font-size: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo-group">
+            <h1>AWARSE</h1>
+            <p>Autonomous Web-Automation Runtime Self-Healing Engine</p>
+        </div>
+        <div class="status-badge">
+            <div class="pulse-dot"></div>
+            Live Session Active
+        </div>
+    </header>
+
+    <main>
+        <!-- Stats summary -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Heals</h3>
+                <div class="value" id="stat-total">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Success Rate</h3>
+                <div class="value" id="stat-rate">100%</div>
+            </div>
+            <div class="stat-card">
+                <h3>Avg. Confidence</h3>
+                <div class="value" id="stat-confidence">0%</div>
+            </div>
+        </div>
+
+        <!-- Log List card -->
+        <div class="logs-card">
+            <div class="card-header">
+                <h2>Healed Selectors Log</h2>
+                <button class="refresh-btn" onclick="fetchLogs()">Force Refresh</button>
+            </div>
+
+            <div id="log-container">
+                <!-- Loaded dynamically -->
+                <div class="empty-state">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    <p>Waiting for self-healing events...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        async function fetchLogs() {
+            try {
+                const response = await fetch('healed_logs.json');
+                const logs = await response.json();
+                updateUI(logs);
+            } catch (err) {
+                console.error("Error loading healed_logs.json:", err);
+            }
+        }
+
+        function updateUI(logs) {
+            const container = document.getElementById('log-container');
+            
+            // Update stats
+            document.getElementById('stat-total').innerText = logs.length;
+            
+            if (logs.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                        <p>Waiting for self-healing events...</p>
+                    </div>
+                `;
+                document.getElementById('stat-confidence').innerText = "0%";
+                return;
+            }
+
+            // Calculate confidence average
+            const sumConf = logs.reduce((acc, log) => acc + (log.confidence || 1.0), 0);
+            const avgConf = Math.round((sumConf / logs.length) * 100);
+            document.getElementById('stat-confidence').innerText = avgConf + "%";
+
+            // Render log list
+            let html = '<div class="log-list">';
+            logs.reverse().forEach(log => {
+                const confScore = Math.round((log.confidence || 1.0) * 100);
+                const confClass = confScore >= 80 ? 'high' : 'medium';
+                const date = new Date(log.timestamp).toLocaleTimeString();
+
+                html += `
+                    <div class="log-item">
+                        <div class="log-header">
+                            <div class="selector-mapping">
+                                <span class="action-badge">${log.action_type}</span>
+                                <span class="selector-pill broken">${escapeHtml(log.failed_selector)}</span>
+                                <span class="arrow">&rarr;</span>
+                                <span class="selector-pill healed">${escapeHtml(log.healed_selector)}</span>
+                            </div>
+                            <div class="meta-group">
+                                <span class="confidence-badge ${confClass}">Confidence: ${confScore}%</span>
+                                <span class="timestamp">${date}</span>
+                            </div>
+                        </div>
+                        <div class="log-explanation">
+                            <strong>Reason:</strong> ${escapeHtml(log.explanation || 'Self-healed using Gemini DOM analysis.')}
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Poll every 1.5 seconds
+        setInterval(fetchLogs, 1500);
+        fetchLogs();
+    </script>
+</body>
+</html>

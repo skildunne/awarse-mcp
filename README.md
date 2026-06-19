@@ -102,6 +102,20 @@ venv/bin/python verify_healing.py
 
 ---
 
+## AWARSE Live Dashboard
+
+AWARSE includes a built-in, real-time web dashboard to view selector healing logs, stats, and session events.
+
+* **Automatic Startup**: The dashboard server automatically spins up in a background daemon thread on port `8080` whenever the main AWARSE MCP server runs.
+* **Accessing the Dashboard**: Open your browser and navigate to:
+  `http://localhost:8080/dashboard.html`
+* **Features**:
+  - **Live Logging**: Automatically polls session logs (`healed_logs.json`) every 1.5 seconds to display newly resolved selectors without reloading.
+  - **Dynamic Stats**: Tracks total heals, average healing confidence, and session status.
+  - **Reason Analysis**: Detailed log cards explain why elements were healed and what parameters (text, tags, classes, roles) were used by the LLM.
+
+---
+
 ## Agentic Usage Example (Antigravity SDK)
 
 We have provided a ready-to-run integration script **[example_use.py](example_use.py)** showing how to hook the AWARSE MCP server into a custom agent built on the **Google Antigravity SDK**. 
