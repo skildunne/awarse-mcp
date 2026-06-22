@@ -170,6 +170,38 @@ By default, AWARSE uses a highly token-efficient markdown layout snapshot (conce
 You can toggle this mode using:
 * `TOKEN_EFFICIENT_MODE="true"` (Default - uses optimized markdown element mapping)
 * `TOKEN_EFFICIENT_MODE="false"` (Uses raw HTML body context + JSON DOM representation)
+---
+
+## Customizing the Automation Framework
+
+AWARSE abstracts the framework implementation underneath a stable tool layer. You can dynamically swap the automation runner by setting the `AUTOMATION_FRAMEWORK` environment variable in your `.env` or client config:
+
+### 1. Playwright (Default Web Engine)
+* Set `AUTOMATION_FRAMEWORK="playwright"`
+* Uses the local asynchronous Playwright chromium browser.
+
+### 2. Selenium (Web Engine)
+* Set `AUTOMATION_FRAMEWORK="selenium"`
+* Requires the `selenium` package. It will automatically launch a headless Chrome WebDriver.
+* Install additional Selenium package:
+  ```bash
+  venv/bin/pip install selenium
+  ```
+
+### 3. Appium (Mobile Native Engine)
+* Set `AUTOMATION_FRAMEWORK="appium"`
+* Requires the `Appium-Python-Client` package. It connects to a running Appium mobile server and uses XML page source layouts to heal native app selectors.
+* Install additional Appium package:
+  ```bash
+  venv/bin/pip install Appium-Python-Client
+  ```
+* Configure Appium server and capability variables in your `.env`:
+  ```env
+  APPIUM_SERVER_URL="http://localhost:4723"
+  APPIUM_PLATFORM_NAME="Android" # or iOS
+  APPIUM_DEVICE_NAME="Android Emulator"
+  APPIUM_APP="/path/to/your/app.apk"
+  ```
 
 ---
 

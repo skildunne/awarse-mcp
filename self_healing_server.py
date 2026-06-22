@@ -48,39 +48,40 @@ try:
 except Exception as init_err:
     pass
 
-class PlaywrightBrowser:
-    def __init__(self):
-        self.playwright = None
-        self.browser = None
-        self.context = None
-        self.page = None
-
-    async def get_page(self):
-        if self.page is None:
-            print("[AWARSE] Launching headless browser...")
-            self.playwright = await async_playwright().start()
-            self.browser = await self.playwright.chromium.launch(headless=True)
-            self.context = await self.browser.new_context()
-            self.page = await self.context.new_page()
-        return self.page
-
-    async def close(self):
-        print("[AWARSE] Closing browser...")
-        if self.browser:
-            await self.browser.close()
-        if self.playwright:
-            await self.playwright.stop()
-        self.page = None
-        self.context = None
-        self.browser = None
-        self.playwright = None
-
-# Global browser manager instance
-browser_manager = PlaywrightBrowser()
-
 async def generate_markdown_snapshot(page) -> str:
     """Generates a highly token-efficient markdown representation of interactive elements, similar to playwright-cli."""
-    snapshot_js = """() => {
+    # Playwright page vs Selenium driver snapshot extraction
+    if hasattr(page, 'evaluate'):
+        # Playwright
+        snapshot_js = """() => {
+            const elements = Array.from(document.querySelectorAll('input, button, select, textarea, a, [role="button"], [class*="btn"]'));
+            let result = [];
+            elements.forEach((el, index) => {
+                const rect = el.getBoundingClientRect();
+                if (rect.width === 0 || rect.height === 0 || window.getComputedStyle(el).display === 'none') {
+                    return;
+                }
+                
+                const tagName = el.tagName.toLowerCase();
+                const id = el.id ? `#${el.id}` : '';
+                const className = el.className ? `.${el.className.trim().replace(/\\s+/g, '.')}` : '';
+                const text = el.innerText || el.value || '';
+                const type = el.getAttribute('type') ? `[type="${el.getAttribute('type')}"]` : '';
+                const role = el.getAttribute('role') ? `[role="${el.getAttribute('role')}"]` : '';
+                const name = el.getAttribute('name') ? `[name="${el.getAttribute('name')}"]` : '';
+                const placeholder = el.getAttribute('placeholder') ? `[placeholder="${el.getAttribute('placeholder')}"]` : '';
+                const ariaLabel = el.getAttribute('aria-label') ? `[aria-label="${el.getAttribute('aria-label')}"]` : '';
+                
+                let attrs = [id, className, type, role, name, placeholder, ariaLabel].filter(Boolean).join(' ');
+                let item = `- [e${index}] <${tagName} ${attrs}> "${text.trim().substring(0, 50)}"`;
+                result.push(item);
+            });
+            return result.join('\\n');
+        }"""
+        return await page.evaluate(snapshot_js)
+    else:
+        # Selenium
+        snapshot_js = """
         const elements = Array.from(document.querySelectorAll('input, button, select, textarea, a, [role="button"], [class*="btn"]'));
         let result = [];
         elements.forEach((el, index) => {
@@ -88,97 +89,80 @@ async def generate_markdown_snapshot(page) -> str:
             if (rect.width === 0 || rect.height === 0 || window.getComputedStyle(el).display === 'none') {
                 return;
             }
-            
             const tagName = el.tagName.toLowerCase();
             const id = el.id ? `#${el.id}` : '';
             const className = el.className ? `.${el.className.trim().replace(/\\s+/g, '.')}` : '';
             const text = el.innerText || el.value || '';
-            const type = el.type ? `[type="${el.type}"]` : '';
+            const type = el.getAttribute('type') ? `[type="${el.getAttribute('type')}"]` : '';
             const role = el.getAttribute('role') ? `[role="${el.getAttribute('role')}"]` : '';
             const name = el.getAttribute('name') ? `[name="${el.getAttribute('name')}"]` : '';
             const placeholder = el.getAttribute('placeholder') ? `[placeholder="${el.getAttribute('placeholder')}"]` : '';
             const ariaLabel = el.getAttribute('aria-label') ? `[aria-label="${el.getAttribute('aria-label')}"]` : '';
             
             let attrs = [id, className, type, role, name, placeholder, ariaLabel].filter(Boolean).join(' ');
-            let item = `- [e${index}] <${tagName} ${attrs}> "${text.trim().substring(0, 50)}"`;
-            result.push(item);
+            result.push(`- [e${index}] <${tagName} ${attrs}> "${text.trim().substring(0, 50)}"`);
         });
         return result.join('\\n');
-    }"""
-    return await page.evaluate(snapshot_js)
+        """
+        return page.execute_script(snapshot_js)
 
-async def heal_selector(page, failed_selector: str, action_type: str) -> str:
-    """Uses the configured LLM provider to heal a failed selector by analyzing the DOM state."""
-    # Check if token-efficient mode is enabled (default is True)
+async def heal_selector(driver, failed_selector: str, action_type: str, framework: str = "playwright") -> str:
+    """Uses the configured LLM provider to heal a failed selector by analyzing the layout snapshot."""
     token_efficient = os.environ.get("TOKEN_EFFICIENT_MODE", "true").lower() == "true"
     provider = os.environ.get("LLM_PROVIDER", "gemini").lower()
     
-    if token_efficient:
-        print(f"[AWARSE Healer] Generating token-efficient Markdown snapshot...")
-        snapshot_str = await generate_markdown_snapshot(page)
+    # Extract snapshot based on framework
+    if framework == "appium":
+        print(f"[AWARSE Healer] Extracting native Appium XML page source layout...")
+        layout_content = driver.page_source
         prompt = f"""
 You are the self-healing engine of AWARSE (Autonomous Web-Automation Runtime Self-Healing Engine).
-A web interaction '{action_type}' failed because the selector '{failed_selector}' could not be located.
-The structure of the web page has changed. Your task is to identify the new selector for the intended element.
+A mobile native Appium action '{action_type}' failed because the selector '{failed_selector}' could not be located.
+The mobile UI structure has changed. Your task is to identify the corrected selector for the intended element.
 
-Here is a token-efficient interactive element map of the current page layout:
-```markdown
-{snapshot_str}
+Here is the XML layout tree of the current mobile screen:
+```xml
+{layout_content[:15000]}
 ```
 
-Based on the old selector '{failed_selector}' and the current page elements, identify the intended target.
-Provide a corrected, working CSS selector for that element.
+Based on the old selector '{failed_selector}' and the current mobile layout, identify the intended target.
+Provide a corrected XPath, ID, or Accessibility ID selector for that element.
 
 Return ONLY a JSON object matching this structure:
 {{
-  "healed_selector": "working CSS selector (e.g., 'button.btn-primary' or 'input#email')",
+  "healed_selector": "working selector (e.g., '//android.widget.Button[@text=\"Submit\"]' or 'id/continue_btn')",
   "explanation": "Brief reasoning for selecting this element",
   "confidence": 0.0 to 1.0
 }}
 """
     else:
-        # Fallback to full HTML context and JSON DOM snapshot
-        print(f"[AWARSE Healer] Falling back to full HTML context...")
-        dom_snapshot = await page.evaluate("""() => {
-            const elements = Array.from(document.querySelectorAll('input, button, select, textarea, a, [role="button"], [class*="btn"]'));
-            return elements.map((el, index) => {
-                return {
-                    index: index,
-                    tagName: el.tagName,
-                    id: el.id,
-                    className: el.className,
-                    text: el.innerText || el.value || '',
-                    type: el.type || '',
-                    role: el.getAttribute('role') || '',
-                    name: el.getAttribute('name') || '',
-                    placeholder: el.getAttribute('placeholder') || '',
-                    ariaLabel: el.getAttribute('aria-label') || ''
-                };
-            });
-        }""")
-        html_content = await page.content()
-        dom_str = json.dumps(dom_snapshot, indent=2)
+        # Web-based (Playwright or Selenium)
+        if token_efficient:
+            print(f"[AWARSE Healer] Generating token-efficient Markdown snapshot...")
+            snapshot_str = await generate_markdown_snapshot(driver)
+            layout_details = f"```markdown\n{snapshot_str}\n```"
+        else:
+            print(f"[AWARSE Healer] Falling back to full HTML context...")
+            if framework == "playwright":
+                html_content = await driver.content()
+            else:
+                html_content = driver.page_source
+            layout_details = f"```html\n{html_content[:10000]}\n```"
+            
         prompt = f"""
 You are the self-healing engine of AWARSE (Autonomous Web-Automation Runtime Self-Healing Engine).
 A web interaction '{action_type}' failed because the selector '{failed_selector}' could not be located.
 The structure of the web page has changed. Your task is to identify the new selector for the intended element.
 
-Here is the list of interactive elements found on the page:
-```json
-{dom_str}
-```
-
-And here is the raw HTML body context (first 10000 characters):
-```html
-{html_content[:10000]}
-```
+Here is the layout representation of the current page:
+{layout_details}
 
 Based on the old selector '{failed_selector}' and the current page elements, identify the intended target.
-Provide a corrected, working CSS selector for that element.
+Provide a corrected, working CSS selector or XPath for that element.
 
 Return ONLY a JSON object matching this structure:
 {{
-  "healed_selector": "working CSS selector (e.g., 'button.btn-primary' or 'input#email')",
+  "healed_selector": "working selector (e.g., 'button.btn-primary' or 'input#email')",
   "explanation": "Brief reasoning for selecting this element",
   "confidence": 0.0 to 1.0
 }}
@@ -270,76 +254,280 @@ Return ONLY a JSON object matching this structure:
         print(f"[AWARSE Healer] Failed to parse healer response: {e}. Raw response: {response_text}")
         raise
 
+# --- ABSTRACT DRIVERS LAYER ---
+
+class BaseDriver:
+    async def navigate(self, url: str) -> str:
+        raise NotImplementedError()
+    async def click(self, selector: str) -> str:
+        raise NotImplementedError()
+    async def fill(self, selector: str, value: str) -> str:
+        raise NotImplementedError()
+    async def get_content(self) -> str:
+        raise NotImplementedError()
+    async def evaluate_js(self, script: str) -> str:
+        raise NotImplementedError()
+    async def take_screenshot(self, filename: str) -> str:
+        raise NotImplementedError()
+    async def get_snapshot(self) -> str:
+        raise NotImplementedError()
+
+class PlaywrightDriver(BaseDriver):
+    def __init__(self):
+        self.playwright = None
+        self.browser = None
+        self.context = None
+        self.page = None
+
+    async def get_page(self):
+        if self.page is None:
+            print("[AWARSE] Launching Playwright headless browser...")
+            self.playwright = await async_playwright().start()
+            self.browser = await self.playwright.chromium.launch(headless=True)
+            self.context = await self.browser.new_context()
+            self.page = await self.context.new_page()
+        return self.page
+
+    async def navigate(self, url: str) -> str:
+        page = await self.get_page()
+        await page.goto(url)
+        return f"Successfully navigated to {url} (Playwright)"
+
+    async def click(self, selector: str) -> str:
+        page = await self.get_page()
+        try:
+            await page.click(selector, timeout=3000)
+            return f"Successfully clicked: {selector}"
+        except Exception as e:
+            print(f"[AWARSE] Click failed for '{selector}'. Healing...")
+            healed = await heal_selector(page, selector, "click", "playwright")
+            await page.click(healed, timeout=5000)
+            return f"Clicked after healing. Healed '{selector}' to '{healed}'"
+
+    async def fill(self, selector: str, value: str) -> str:
+        page = await self.get_page()
+        try:
+            await page.fill(selector, value, timeout=3000)
+            return f"Successfully filled: {selector}"
+        except Exception as e:
+            print(f"[AWARSE] Fill failed for '{selector}'. Healing...")
+            healed = await heal_selector(page, selector, "fill", "playwright")
+            await page.fill(healed, value, timeout=5000)
+            return f"Filled after healing. Healed '{selector}' to '{healed}'"
+
+    async def get_content(self) -> str:
+        page = await self.get_page()
+        return await page.evaluate("() => document.body.innerText")
+
+    async def evaluate_js(self, script: str) -> str:
+        page = await self.get_page()
+        res = await page.evaluate(script)
+        return f"JS evaluation returned: {res}"
+
+    async def take_screenshot(self, filename: str) -> str:
+        page = await self.get_page()
+        filepath = os.path.abspath(filename)
+        await page.screenshot(path=filepath)
+        return f"Screenshot saved successfully to {filepath}"
+
+    async def get_snapshot(self) -> str:
+        page = await self.get_page()
+        return await generate_markdown_snapshot(page)
+
+class SeleniumDriver(BaseDriver):
+    def __init__(self):
+        self.driver = None
+
+    def get_driver(self):
+        if self.driver is None:
+            print("[AWARSE] Launching Selenium headless Chrome...")
+            from selenium import webdriver
+            from selenium.webdriver.chrome.options import Options
+            options = Options()
+            options.add_argument("--headless")
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+            self.driver = webdriver.Chrome(options=options)
+        return self.driver
+
+    async def navigate(self, url: str) -> str:
+        driver = self.get_driver()
+        driver.get(url)
+        return f"Successfully navigated to {url} (Selenium)"
+
+    async def click(self, selector: str) -> str:
+        driver = self.get_driver()
+        from selenium.webdriver.common.by import By
+        by = By.XPATH if selector.startswith("/") or selector.startswith("(") else By.CSS_SELECTOR
+        try:
+            element = driver.find_element(by, selector)
+            element.click()
+            return f"Successfully clicked: {selector}"
+        except Exception as e:
+            print(f"[AWARSE] Click failed for '{selector}'. Healing...")
+            healed = await heal_selector(driver, selector, "click", "selenium")
+            by_healed = By.XPATH if healed.startswith("/") or healed.startswith("(") else By.CSS_SELECTOR
+            element = driver.find_element(by_healed, healed)
+            element.click()
+            return f"Clicked after healing. Healed '{selector}' to '{healed}'"
+
+    async def fill(self, selector: str, value: str) -> str:
+        driver = self.get_driver()
+        from selenium.webdriver.common.by import By
+        by = By.XPATH if selector.startswith("/") or selector.startswith("(") else By.CSS_SELECTOR
+        try:
+            element = driver.find_element(by, selector)
+            element.clear()
+            element.send_keys(value)
+            return f"Successfully filled: {selector}"
+        except Exception as e:
+            print(f"[AWARSE] Fill failed for '{selector}'. Healing...")
+            healed = await heal_selector(driver, selector, "fill", "selenium")
+            by_healed = By.XPATH if healed.startswith("/") or healed.startswith("(") else By.CSS_SELECTOR
+            element = driver.find_element(by_healed, healed)
+            element.clear()
+            element.send_keys(value)
+            return f"Filled after healing. Healed '{selector}' to '{healed}'"
+
+    async def get_content(self) -> str:
+        driver = self.get_driver()
+        return driver.find_element("css selector", "body").text
+
+    async def evaluate_js(self, script: str) -> str:
+        driver = self.get_driver()
+        res = driver.execute_script(script)
+        return f"JS evaluation returned: {res}"
+
+    async def take_screenshot(self, filename: str) -> str:
+        driver = self.get_driver()
+        filepath = os.path.abspath(filename)
+        driver.save_screenshot(filepath)
+        return f"Screenshot saved successfully to {filepath}"
+
+    async def get_snapshot(self) -> str:
+        driver = self.get_driver()
+        return await generate_markdown_snapshot(driver)
+
+class AppiumDriver(BaseDriver):
+    def __init__(self):
+        self.driver = None
+
+    def get_driver(self):
+        if self.driver is None:
+            print("[AWARSE] Connecting to Appium mobile automation server...")
+            from appium import webdriver
+            from appium.options.common import AppiumOptions
+            
+            server_url = os.environ.get("APPIUM_SERVER_URL", "http://localhost:4723")
+            options = AppiumOptions()
+            options.set_capability("platformName", os.environ.get("APPIUM_PLATFORM_NAME", "Android"))
+            options.set_capability("automationName", os.environ.get("APPIUM_AUTOMATION_NAME", "UiAutomator2"))
+            options.set_capability("deviceName", os.environ.get("APPIUM_DEVICE_NAME", "Android Emulator"))
+            options.set_capability("app", os.environ.get("APPIUM_APP", ""))
+            
+            self.driver = webdriver.Remote(server_url, options=options)
+        return self.driver
+
+    async def navigate(self, url: str) -> str:
+        # Navigate is usually deep linking or opening app activity in mobile
+        driver = self.get_driver()
+        driver.get(url)
+        return f"Navigated app to: {url} (Appium)"
+
+    async def click(self, selector: str) -> str:
+        driver = self.get_driver()
+        from selenium.webdriver.common.by import By
+        by = By.XPATH if selector.startswith("/") or selector.startswith("(") else By.ID
+        try:
+            element = driver.find_element(by, selector)
+            element.click()
+            return f"Successfully tapped element: {selector}"
+        except Exception as e:
+            print(f"[AWARSE] Tap failed for '{selector}'. Healing...")
+            healed = await heal_selector(driver, selector, "tap", "appium")
+            by_healed = By.XPATH if healed.startswith("/") or healed.startswith("(") else By.ID
+            element = driver.find_element(by_healed, healed)
+            element.click()
+            return f"Tapped element after healing. Healed '{selector}' to '{healed}'"
+
+    async def fill(self, selector: str, value: str) -> str:
+        driver = self.get_driver()
+        from selenium.webdriver.common.by import By
+        by = By.XPATH if selector.startswith("/") or selector.startswith("(") else By.ID
+        try:
+            element = driver.find_element(by, selector)
+            element.send_keys(value)
+            return f"Successfully sent keys to element: {selector}"
+        except Exception as e:
+            print(f"[AWARSE] Input failed for '{selector}'. Healing...")
+            healed = await heal_selector(driver, selector, "input", "appium")
+            by_healed = By.XPATH if healed.startswith("/") or healed.startswith("(") else By.ID
+            element = driver.find_element(by_healed, healed)
+            element.send_keys(value)
+            return f"Sent keys after healing. Healed '{selector}' to '{healed}'"
+
+    async def get_content(self) -> str:
+        # Returns raw XML string in mobile view
+        driver = self.get_driver()
+        return driver.page_source
+
+    async def evaluate_js(self, script: str) -> str:
+        return "evaluate_js is not supported on mobile native platforms."
+
+    async def take_screenshot(self, filename: str) -> str:
+        driver = self.get_driver()
+        filepath = os.path.abspath(filename)
+        driver.save_screenshot(filepath)
+        return f"Mobile screenshot saved to {filepath}"
+
+    async def get_snapshot(self) -> str:
+        # In Appium, layout snapshot is the raw page source XML hierarchy
+        driver = self.get_driver()
+        return driver.page_source
+
+# Instantiate active driver based on env config
+framework = os.environ.get("AUTOMATION_FRAMEWORK", "playwright").lower()
+
+if framework == "playwright":
+    driver_instance = PlaywrightDriver()
+elif framework == "selenium":
+    driver_instance = SeleniumDriver()
+elif framework == "appium":
+    driver_instance = AppiumDriver()
+else:
+    raise ValueError(f"Unsupported automation framework: {framework}")
+
+# --- MCP TOOLS ---
+
 @mcp.tool()
 async def navigate(url: str) -> str:
-    """Navigate the browser to a given URL."""
-    page = await browser_manager.get_page()
-    print(f"[AWARSE] Navigating to: {url}")
-    await page.goto(url)
-    return f"Successfully navigated to {url}"
+    """Navigate the browser page or mobile app to a given URL."""
+    return await driver_instance.navigate(url)
 
 @mcp.tool()
 async def click_element(selector: str) -> str:
-    """Click an element on the page. Automatically heals the selector if it fails."""
-    page = await browser_manager.get_page()
-    try:
-        print(f"[AWARSE] Clicking element: {selector}")
-        await page.click(selector, timeout=3000)
-        return f"Successfully clicked element: {selector}"
-    except Exception as e:
-        print(f"[AWARSE] Click failed for selector '{selector}'. Attempting self-healing...")
-        try:
-            healed = await heal_selector(page, selector, "click")
-            if healed:
-                print(f"[AWARSE] Retrying click with healed selector: {healed}")
-                await page.click(healed, timeout=5000)
-                return f"Successfully clicked element after self-healing. Selector healed from '{selector}' to '{healed}'"
-        except Exception as heal_err:
-            return f"Failed to click element. Selector '{selector}' failed, and self-healing failed with error: {heal_err}"
-        return f"Failed to click element: {e}"
+    """Click/tap an element. Automatically heals the selector if it fails."""
+    return await driver_instance.click(selector)
 
 @mcp.tool()
 async def fill_element(selector: str, value: str) -> str:
-    """Fill a form field with a value. Automatically heals the selector if it fails."""
-    page = await browser_manager.get_page()
-    try:
-        print(f"[AWARSE] Filling element '{selector}' with value...")
-        await page.fill(selector, value, timeout=3000)
-        return f"Successfully filled element: {selector}"
-    except Exception as e:
-        print(f"[AWARSE] Fill failed for selector '{selector}'. Attempting self-healing...")
-        try:
-            healed = await heal_selector(page, selector, "fill")
-            if healed:
-                print(f"[AWARSE] Retrying fill with healed selector: {healed}")
-                await page.fill(healed, value, timeout=5000)
-                return f"Successfully filled element after self-healing. Selector healed from '{selector}' to '{healed}'"
-        except Exception as heal_err:
-            return f"Failed to fill element. Selector '{selector}' failed, and self-healing failed with error: {heal_err}"
-        return f"Failed to fill element: {e}"
+    """Fill a form/input element with a value. Automatically heals the selector if it fails."""
+    return await driver_instance.fill(selector, value)
 
 @mcp.tool()
 async def get_content() -> str:
-    """Retrieve the inner text content of the current page."""
-    page = await browser_manager.get_page()
-    text = await page.evaluate("() => document.body.innerText")
-    return text
+    """Retrieve the text content (web) or layout XML (mobile) of the current page/screen."""
+    return await driver_instance.get_content()
 
 @mcp.tool()
 async def evaluate_js(script: str) -> str:
-    """Evaluate a JavaScript string on the current page."""
-    page = await browser_manager.get_page()
-    result = await page.evaluate(script)
-    return f"JS evaluation returned: {result}"
+    """Evaluate a JavaScript string on the current web page (Supported on Web frameworks only)."""
+    return await driver_instance.evaluate_js(script)
 
 @mcp.tool()
 async def take_screenshot(filename: str = "screenshot.png") -> str:
-    """Take a screenshot of the current page and save it locally."""
-    page = await browser_manager.get_page()
-    filepath = os.path.abspath(filename)
-    print(f"[AWARSE] Saving screenshot to: {filepath}")
-    await page.screenshot(path=filepath)
-    return f"Screenshot saved successfully to {filepath}"
+    """Take a screenshot of the current page/screen and save it locally."""
+    return await driver_instance.take_screenshot(filename)
 
 # --- RESOURCES ---
 
@@ -350,19 +538,16 @@ def get_healed_logs() -> str:
 
 @mcp.resource("awarse://page/dom")
 async def get_page_dom() -> str:
-    """Get the token-efficient Markdown snapshot of the active page layout."""
-    page = await browser_manager.get_page()
-    if page:
-        return await generate_markdown_snapshot(page)
-    return "No active page loaded."
+    """Get the layout snapshot (Markdown elements map for web, XML for mobile) of the active page."""
+    return await driver_instance.get_snapshot()
 
 # --- PROMPTS ---
 
 @mcp.prompt()
 def diagnose_selector_failure(selector: str, action: str) -> str:
-    """Create a diagnostic assistant prompt to analyze a failed web element action."""
+    """Create a diagnostic assistant prompt to analyze a failed web/mobile element action."""
     return f"""
-Analyze the web automation failure for action '{action}' on selector '{selector}'.
+Analyze the web/mobile automation failure for action '{action}' on selector '{selector}'.
 First, review the healed selectors logs using the 'awarse://logs/healed-selectors' resource.
 Then, output a clear summary detailing:
 1. Why the original selector failed.
