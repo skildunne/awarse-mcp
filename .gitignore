@@ -9,3 +9,6 @@ __pycache__/
 
 # Output screenshots
 *.png
+
+# Dynamic logs
+healed_logs.json

@@ -1,0 +1,14 @@
+# Core Dependencies
+mcp>=1.27.2
+playwright>=1.60.0
+google-genai>=2.8.0
+python-dotenv>=1.2.2
+google-antigravity>=0.1.3
+
+# LLM Provider Clients (Optional but recommended for full provider support)
+anthropic>=0.109.1
+openai>=2.41.1
+
+# Automation Framework Clients (Optional but recommended for alternative drivers)
+selenium>=4.20.0
+Appium-Python-Client>=4.0.0

@@ -228,6 +228,25 @@ To register AWARSE with your preferred AI coding assistants (e.g., Claude Deskto
 
 ---
 
+## 📘 Comprehensive Setup & Configuration Guidelines
+
+For advanced configurations, integration profiles, step-by-step setup guides, and troubleshooting instructions for various LLMs (Gemini, Claude, OpenAI/Copilot, local models) and automation frameworks (Playwright, Selenium, Appium), please refer to the dedicated:
+👉 **[USER_GUIDELINES.md](USER_GUIDELINES.md)**
+
+---
+
+## 🛠️ Automated CI/CD Builds (GitHub Actions)
+
+AWARSE is equipped with an automated CI build workflow configured in [.github/workflows/test.yml](.github/workflows/test.yml).
+
+The workflow executes on every `push` and `pull_request` to the `main` branch. It ensures code quality and correctness by running the following steps:
+1. Sets up a clean **Python 3.11** environment.
+2. Installs all required packages defined in `requirements.txt`.
+3. Installs headless **Playwright** browser dependencies (`playwright install chromium --with-deps`).
+4. Runs the self-healing verification script in **Mock Mode** (`AWARSE_MOCK_HEAL="true"`) to verify the end-to-end framework execution and element recovery lifecycle without requiring external LLM API keys.
+
+---
+
 ## Customer Site & Production Deployment
 
 To run the self-healing orchestrator on a customer site, you can choose between two deployment topologies depending on security requirements and network boundaries.

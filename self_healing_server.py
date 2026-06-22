@@ -170,7 +170,21 @@ Return ONLY a JSON object matching this structure:
     
     print(f"[AWARSE Healer] Invoking LLM provider '{provider}' to heal selector...")
     
-    if provider == "gemini":
+    if os.environ.get("AWARSE_MOCK_HEAL") == "true":
+        print("[AWARSE Healer] MOCK MODE ACTIVE: Simulating LLM response.")
+        if failed_selector == "#submit-btn":
+            response_text = json.dumps({
+                "healed_selector": "#healed-submit-action-button",
+                "explanation": "Simulated healing for verification purposes in CI.",
+                "confidence": 1.0
+            })
+        else:
+            response_text = json.dumps({
+                "healed_selector": failed_selector,
+                "explanation": "Simulated healing (fallback).",
+                "confidence": 1.0
+            })
+    elif provider == "gemini":
         api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY not found in environment.")
